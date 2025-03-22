@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 
 // Scene setup
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xffffff); // White background
+scene.background = new THREE.Color(0x000000); // Black background
 
 // Camera setup
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -31,26 +31,17 @@ const cylinderMaterial = new THREE.MeshBasicMaterial({
     color: 0x222222,
     side: THREE.BackSide,
     transparent: true,
-    opacity: 0.6,
+    opacity: 0.9,
     map: gridTexture
 });
 const cylinder = new THREE.Mesh(cylinderGeometry, cylinderMaterial);
 scene.add(cylinder);
 
-// Add a white ground plane 
-const planeGeometry = new THREE.PlaneGeometry(20, 20);
-const planeMaterial = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
-    side: THREE.DoubleSide
-});
-const plane = new THREE.Mesh(planeGeometry, planeMaterial);
-plane.rotation.x = Math.PI / 2;
-plane.position.y = -0.5;
-scene.add(plane);
-
-// Create orbital paths - Earth is on XZ plane
+// Create orbital paths - Using more accurate relative distances
+// Earth's orbit radius: 1 AU (astronomical unit)
+// Mars's orbit radius: 1.524 AU
 const earthOrbitRadius = 2.5;
-const marsOrbitRadius = 4;
+const marsOrbitRadius = earthOrbitRadius * 1.524; // ~ 3.81
 
 // Earth orbit path
 const earthOrbitGeometry = new THREE.BufferGeometry();
@@ -116,31 +107,30 @@ const sightLineMaterial = new THREE.LineBasicMaterial({ color: 0x5555ff });
 const sightLine = new THREE.Line(sightLineGeometry, sightLineMaterial);
 scene.add(sightLine);
 
-// Trail for the apparent path of Mars
-const maxTrailPoints = 2000;
-const trailGeometry = new THREE.BufferGeometry();
-const trailPositions = new Float32Array(maxTrailPoints * 3); // x, y, z for each point
-trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+// Directional arrow for sight line
+const createArrow = () => {
+    const arrowGeometry = new THREE.ConeGeometry(0.1, 0.4, 8);
+    const arrowMaterial = new THREE.MeshBasicMaterial({ color: 0x5555ff });
+    const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
+    scene.add(arrow);
+    return arrow;
+};
+const arrow = createArrow();
 
-// Use a gradient for the trail from white to pink
-const trailColors = new Float32Array(maxTrailPoints * 3);
-trailGeometry.setAttribute('color', new THREE.BufferAttribute(trailColors, 3));
+// Create a small white sphere for the trail template
+const trailSphereGeometry = new THREE.SphereGeometry(0.03, 8, 8);
+const trailSphereMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
-const trailMaterial = new THREE.PointsMaterial({
-    size: 0.05,
-    vertexColors: true,
-    transparent: true,
-    opacity: 0.8
-});
-const trail = new THREE.Points(trailGeometry, trailMaterial);
-scene.add(trail);
+// Array to store the trail spheres
+const maxTrailPoints = 300; // Reduced for better performance with spheres
+const trailSpheres = [];
 
-let trailIndex = 0;
-
-// Orbital parameters
-const T = 5; // Base period for animation
+// Orbital parameters - using more accurate relative periods
+// Earth's year: 365.25 days
+// Mars's year: 686.98 days (ratio of ~1.881 to Earth)
+const T = 5; // Base period for animation cycle in arbitrary time units
 const earthPeriod = T;
-const marsPeriod = T * 1.88; // Mars' orbital period relative to Earth's
+const marsPeriod = T * 1.881; // Mars' orbital period relative to Earth's
 
 const omegaEarth = (2 * Math.PI) / earthPeriod;
 const omegaMars = (2 * Math.PI) / marsPeriod;
@@ -149,6 +139,7 @@ const omegaMars = (2 * Math.PI) / marsPeriod;
 let time = 0;
 let animationSpeed = 1;
 let isPaused = false;
+let trailIndex = 0;
 
 // Add UI controls
 const createUIControls = () => {
@@ -162,7 +153,7 @@ const createUIControls = () => {
 
     const titleDiv = document.createElement('div');
     titleDiv.textContent = 'Apparent Motion of Mars';
-    titleDiv.style.color = '#333';
+    titleDiv.style.color = '#fff';
     titleDiv.style.fontSize = '24px';
     titleDiv.style.fontWeight = 'bold';
     titleDiv.style.position = 'absolute';
@@ -230,9 +221,13 @@ const createUIControls = () => {
     resetBtn.style.color = 'white';
     resetBtn.style.cursor = 'pointer';
     resetBtn.onclick = () => {
-        time = 0;
+        // Remove all spheres from the scene
+        trailSpheres.forEach(sphere => {
+            scene.remove(sphere);
+        });
+        trailSpheres.length = 0;
         trailIndex = 0;
-        trailGeometry.setDrawRange(0, 0);
+        time = 0;
         isPaused = false;
         animationSpeed = 1;
     };
@@ -250,24 +245,24 @@ const createInfoPanel = () => {
     infoPanel.style.right = '20px';
     infoPanel.style.width = '250px';
     infoPanel.style.padding = '15px';
-    infoPanel.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
-    infoPanel.style.color = '#333';
+    infoPanel.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    infoPanel.style.color = '#fff';
     infoPanel.style.borderRadius = '5px';
     infoPanel.style.fontFamily = 'Arial, sans-serif';
     infoPanel.style.fontSize = '14px';
     infoPanel.style.lineHeight = '1.4';
     infoPanel.style.zIndex = '100';
-    infoPanel.style.border = '1px solid #ddd';
+    infoPanel.style.border = '1px solid #444';
 
     infoPanel.innerHTML = `
-    <h3 style="margin-top: 0; margin-bottom: 10px;">Retrograde Motion of Mars</h3>
-    <p>This simulation shows how Mars appears to move backwards in the sky when viewed from Earth.</p>
-    <p>- <span style="color: #FFB000;">Yellow</span>: Sun</p>
-    <p>- <span style="color: #3333ff;">Blue</span>: Earth</p>
-    <p>- <span style="color: #ff3333;">Red</span>: Mars</p>
-    <p>- <span style="color: pink;">Pink trail</span>: Apparent path of Mars as seen from Earth on the celestial sphere</p>
-    <p>The simulation includes the ~1.85° tilt between Earth and Mars orbital planes.</p>
-  `;
+        <h3 style="margin-top: 0; margin-bottom: 10px;">Retrograde Motion of Mars</h3>
+        <p>This simulation shows how Mars appears to move backwards in the sky when viewed from Earth.</p>
+        <p>- <span style="color: #FFB000;">Yellow</span>: Sun</p>
+        <p>- <span style="color: #3333ff;">Blue</span>: Earth</p>
+        <p>- <span style="color: #ff3333;">Red</span>: Mars</p>
+        <p>- <span style="color: #ffffff;">White spheres</span>: Apparent path of Mars as seen from Earth</p>
+        <p>The loop in the trail shows the retrograde motion when Earth overtakes Mars in its orbit.</p>
+    `;
 
     document.body.appendChild(infoPanel);
 };
@@ -281,12 +276,21 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// Function to map values from one range to another
+const mapRange = (value: number, inMin: number, inMax: number, outMin: number, outMax: number): number => {
+    return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
+};
+
+// Calculate the next trail point (every few frames)
+let frameCount = 0;
+const FRAMES_BETWEEN_TRAIL_POINTS = 5; // Adjust this to control trail density
+
 // Animation loop
 function animate() {
     requestAnimationFrame(animate);
 
     if (!isPaused) {
-        time += 0.01 * animationSpeed;
+        time += 0.005 * animationSpeed; // Reduced speed for smoother motion
 
         // Update Earth position
         earth.position.x = earthOrbitRadius * Math.cos(omegaEarth * time);
@@ -308,58 +312,85 @@ function animate() {
         sightLinePositions[5] = mars.position.z;
         sightLineGeometry.attributes.position.needsUpdate = true;
 
-        // Calculate intersection with cylinder to show apparent position of Mars on celestial sphere
-        const Ex = earth.position.x;
-        const Ey = earth.position.y;
-        const Ez = earth.position.z;
-        const Dx = mars.position.x - Ex;
-        const Dy = mars.position.y - Ey;
-        const Dz = mars.position.z - Ez;
+        // Update arrow position and rotation
+        const direction = new THREE.Vector3().subVectors(
+            new THREE.Vector3(mars.position.x, mars.position.y, mars.position.z),
+            new THREE.Vector3(earth.position.x, earth.position.y, earth.position.z)
+        ).normalize();
 
-        // Calculate the scaling factor for the line to reach the cylinder
-        const cylinderRadius = 8;
-        const a = (Dx * Dx) + (Dz * Dz); // Ignoring Y for simplification
-        const b = 2 * (Ex * Dx + Ez * Dz);
-        const c = (Ex * Ex) + (Ez * Ez) - (cylinderRadius * cylinderRadius);
+        // Scale line of sight for arrow placement
+        const lineLength = new THREE.Vector3().subVectors(
+            new THREE.Vector3(mars.position.x, mars.position.y, mars.position.z),
+            new THREE.Vector3(earth.position.x, earth.position.y, earth.position.z)
+        ).length();
 
-        const discriminant = b * b - 4 * a * c;
+        const arrowPosition = new THREE.Vector3(
+            earth.position.x + direction.x * (lineLength * 0.7),
+            earth.position.y + direction.y * (lineLength * 0.7),
+            earth.position.z + direction.z * (lineLength * 0.7)
+        );
 
-        if (discriminant > 0) {
-            // Line intersects cylinder
-            const t1 = (-b + Math.sqrt(discriminant)) / (2 * a);
-            const t2 = (-b - Math.sqrt(discriminant)) / (2 * a);
+        arrow.position.copy(arrowPosition);
+        arrow.lookAt(mars.position);
 
-            // Choose the intersection in the direction of Mars from Earth
-            let t;
-            if (t1 > 0 && t2 > 0) {
-                t = Math.min(t1, t2); // Choose the closer intersection
-            } else if (t1 > 0) {
-                t = t1;
-            } else if (t2 > 0) {
-                t = t2;
-            }
+        // Only add a new trail point every few frames
+        frameCount++;
+        if (frameCount >= FRAMES_BETWEEN_TRAIL_POINTS) {
+            frameCount = 0;
 
-            if (t !== undefined) {
-                // Calculate the intersection point
-                const Px = Ex + t * Dx;
-                const Py = Ey + t * Dy;
-                const Pz = Ez + t * Dz;
+            // Calculate intersection with cylinder to show apparent position of Mars on celestial sphere
+            const Ex = earth.position.x;
+            const Ey = earth.position.y;
+            const Ez = earth.position.z;
+            const Dx = mars.position.x - Ex;
+            const Dy = mars.position.y - Ey;
+            const Dz = mars.position.z - Ez;
 
-                // Add point to trail
-                trailPositions[trailIndex * 3] = Px;
-                trailPositions[trailIndex * 3 + 1] = Py;
-                trailPositions[trailIndex * 3 + 2] = Pz;
+            // Calculate the scaling factor for the line to reach the cylinder
+            const cylinderRadius = 8;
 
-                // Add color gradient based on time - gives a nice fade from red to pink
-                const hue = (time * 0.1) % 1;
-                trailColors[trailIndex * 3] = 1.0;  // R (always high for pinkish color)
-                trailColors[trailIndex * 3 + 1] = 0.5 + 0.3 * Math.sin(hue * Math.PI * 2); // G 
-                trailColors[trailIndex * 3 + 2] = 0.7 + 0.3 * Math.cos(hue * Math.PI * 2); // B
+            // Better intersection calculation that accounts for y-coordinate
+            const a = Dx * Dx + Dy * Dy + Dz * Dz;
+            const b = 2 * (Ex * Dx + Ez * Dz); // Note: Ey*Dy is omitted because we're only checking XZ distance to cylinder wall
+            const c = Ex * Ex + Ez * Ez - cylinderRadius * cylinderRadius;
 
-                trailIndex = (trailIndex + 1) % maxTrailPoints;
-                trailGeometry.attributes.position.needsUpdate = true;
-                trailGeometry.attributes.color.needsUpdate = true;
-                trailGeometry.setDrawRange(0, Math.min(trailIndex + 1, maxTrailPoints));
+            const discriminant = b * b - 4 * a * c;
+
+            if (discriminant > 0) {
+                // Line intersects cylinder
+                const t1 = (-b + Math.sqrt(discriminant)) / (2 * a);
+                const t2 = (-b - Math.sqrt(discriminant)) / (2 * a);
+
+                // Choose the correct intersection point
+                let t;
+                if (t1 > 0 && t2 > 0) {
+                    t = Math.min(t1, t2); // Choose the closer intersection
+                } else if (t1 > 0) {
+                    t = t1;
+                } else if (t2 > 0) {
+                    t = t2;
+                }
+
+                if (t !== undefined) {
+                    // Calculate the intersection point
+                    const Px = Ex + t * Dx;
+                    const Py = Ey + t * Dy;
+                    const Pz = Ez + t * Dz;
+
+                    // Create a new sphere at the trail point
+                    const trailSphere = new THREE.Mesh(trailSphereGeometry, trailSphereMaterial);
+                    trailSphere.position.set(Px, Py, Pz);
+                    scene.add(trailSphere);
+
+                    // Add to our array and remove oldest if we exceed max points
+                    trailSpheres.push(trailSphere);
+                    if (trailSpheres.length > maxTrailPoints) {
+                        const oldestSphere = trailSpheres.shift();
+                        if (oldestSphere) {
+                            scene.remove(oldestSphere);
+                        }
+                    }
+                }
             }
         }
     }
