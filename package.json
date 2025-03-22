@@ -1,0 +1,27 @@
+{
+  "name": "retrograde",
+  "version": "1.0.0",
+  "description": "A Three.js project",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "three.js",
+    "3d",
+    "graphics"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "three": "^0.162.0",
+    "@types/three": "^0.162.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2",
+    "vite": "^5.1.4",
+    "@vitejs/plugin-react": "^4.2.1"
+  }
+}
